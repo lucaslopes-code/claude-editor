@@ -1,0 +1,18 @@
+# Caches e arquivos gerados pelo HyperFrames (são recriados sozinhos)
+.hyperframes/
+.transcode-cache/
+.thumbnails/
+.waveform-cache/
+node_modules/
+
+# Skill de terceiros: é uma cópia de https://github.com/LeiteZ/fluxo-de-edicao
+/fluxo-de-edicao/
+
+# Sistema
+Thumbs.db
+desktop.ini
+.DS_Store
+*.tmp
+
+# Trava temporária do HyperFrames
+.media/.lock

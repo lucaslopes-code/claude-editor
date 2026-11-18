@@ -1,0 +1,189 @@
+CONTEXTO DO PROJETO "CLAUDE EDITOR"
+Atualizado em 14/11/2026. Leia este arquivo inteiro ao abrir uma conversa nova nesta pasta.
+
+==============================================================================
+1. O QUE É ISTO
+==============================================================================
+O usuário edita vídeos (Reels/anúncios para Instagram) com o Claude Code. Tudo começou com o
+vídeo do Lucas Leite "Como eu edito meus vídeos com Claude Code" e a skill gratuita dele
+(https://github.com/LeiteZ/fluxo-de-edicao), que ensina um fluxo de 8 etapas:
+iniciar, preparar (transcrição), cortes, motion-mapa, assets, motion-render, câmera, sfx.
+
+Na prática o usuário NÃO quis fazer a montagem guiada da skill (entrevista, referências,
+escrever skills por etapa). Ele quer mandar os brutos e receber o vídeo editado, vendo no
+Studio. Trabalhamos assim: eu edito direto no HyperFrames e ele revisa.
+
+Pasta de trabalho: C:\Users\lukin\OneDrive\Área de Trabalho\Claude editor\
+
+==============================================================================
+2. COMO O USUÁRIO GOSTA DE TRABALHAR
+==============================================================================
+- Conversa sempre em português do Brasil. TUDO que aparece para ele aprovar (descrição de
+  comandos, perguntas) tem que estar em PT-BR e em linguagem simples. Ele já aprovou um
+  comando em inglês sem entender e reclamou.
+- Quer ver o Studio aberto no navegador enquanto eu edito. Abrir sempre, logo no começo.
+  Não abrir duas abas do mesmo projeto (o "preview" já abre uma; não mandar abrir outra).
+- Manda os brutos por link do Google Drive (pasta pública). Eu baixo com gdown.
+- Prefere que eu faça em vez de perguntar ("já faça", "agora é com você, me surpreenda").
+  Perguntar só o que for decisão dele de verdade.
+- No fim de cada vídeo: exportar em qualidade máxima para Instagram numa pasta
+  "Final Instagram" dentro do projeto do vídeo, para ele conferir o arquivo.
+- Não é técnico: explicar sem jargão.
+
+==============================================================================
+3. O QUE ESTÁ INSTALADO E ONDE
+==============================================================================
+Máquina: Windows 11, RTX 3070 Ti (8 GB), Ryzen 9 5900X, 32 GB RAM. Node 24, Python 3.12,
+FFmpeg 8.1 (full build, tem vidstab), Git, Chrome. Sem Premiere nem DaVinci.
+
+Pasta de ferramentas (fora do OneDrive): C:\Users\lukin\.edicao\
+  venv\                 ambiente Python: WhisperX 3.8.6, PyTorch 2.8.0+cu128 (GPU), OpenCV,
+                        PySceneDetect, Pillow, numpy
+  scripts\transcrever.py        transcreve os takes de um projeto (tempo por palavra)
+  scripts\analisar_musica.py    andamento (bpm), fase da batida, energia e letra de uma música
+  modelos-ia\           YuNet (detector de rosto) e sh.rnnn / bd.rnnn (redução de ruído de fala)
+  sons\_entrada\        19 efeitos sonoros que vêm com o HyperFrames (whoosh, pop, click...)
+  montagem.md           caderno da skill fluxo-de-edicao (parado na fase 1; não seguimos)
+
+Skills em C:\Users\lukin\.claude\skills\: fluxo-de-edicao, hyperframes, hyperframes-cli,
+hyperframes-registry, media-use, reverse-any-video, style-sampling (as do HyperFrames foram
+instaladas sozinhas pelo "hyperframes init").
+
+HyperFrames: versão 0.9.49, sempre por "npx --yes hyperframes@0.9.49 ...". Telemetria
+desativada. Conta HeyGen logada (o usuário fez "auth login"), mas no Windows isso não serve
+para música: o catálogo exige o CLI da HeyGen (não existe para Windows) e gerar música é
+recurso pago. NÃO prometer música pelo HyperFrames de novo.
+
+Ferramentas temporárias (yt-dlp, gdown) ficam num venv na pasta temporária da sessão; se
+sumirem, recriar: python -m venv + pip install yt-dlp gdown.
+
+==============================================================================
+4. COISAS QUE APRENDI APANHANDO (não repetir os erros)
+==============================================================================
+Ambiente
+- Baixar modelos do Hugging Face trava sem a variável HF_HUB_DISABLE_XET=1. Usar sempre.
+- WhisperX instala PyTorch só de CPU; reinstalar torch/torchaudio/torchvision 2.8.0 do índice
+  cu128 para usar a placa.
+- Comandos "npx hyperframes media-use resolve" e "auth status" às vezes travam para sempre:
+  rodar com limite de tempo (Start-Job + Wait-Job -Timeout).
+- A API do Openverse (músicas/sons CC0) dá erro 403 pelo PowerShell; funciona pelo curl do Bash.
+- O estabilizador do FFmpeg (vidstab) TRAVA com vídeo de iPhone se não tiver
+  "format=yuv420p" antes dele.
+- Vídeo de iPhone vem com taxa de quadros variável e rotação: converter para 1080x1920,
+  30 fps fixos, antes de usar no HyperFrames (com -g 10 ou -g 30 para o seek funcionar).
+- No PowerShell, substituições de texto com várias linhas falham por causa de LF x CRLF:
+  usar a ferramenta Edit.
+
+HyperFrames
+- Abrir o Studio: "npx --yes hyperframes@0.9.49 preview --background" (porta 3002; para um
+  segundo projeto usar --port 3003). Ele recarrega sozinho quando o arquivo muda.
+- Depois de cada mudança: "check" e depois "snapshot --at ..." e OLHAR as fotos.
+- Todo elemento com tempo precisa de class="clip", data-start, data-duration; animar um filho
+  do .clip, nunca o próprio. Vídeo fica dentro de um wrapper sem tempo para animar câmera.
+- Dois fromTo no mesmo alvo: o segundo precisa de immediateRender: false.
+- Camada de tela cheia (flash) tem que começar com opacity: 0 no CSS.
+- A prévia do Studio tem qualidade menor que o render; julgar qualidade pelo MP4 renderizado.
+- Render final: "render --output <arquivo> --fps 30 --quality high" (1080x1920, ~16-23 Mbps).
+
+Edição (gosto do usuário, confirmado por críticas dele)
+- COR: ele achou o primeiro tratamento do vídeo de comida "muito amarelado" e "estourado".
+  Material de iPhone já vem saturado e contrastado: NÃO aquecer, NÃO subir saturação nem
+  contraste. Tratamento neutro, recuperando os claros, segurando amarelo e verde. Igualar a
+  cor entre takes gravados em luzes diferentes (ele pediu isso explicitamente).
+- ESTABILIZAÇÃO: ele reclamou de vídeo tremido e "sem qualidade". Takes à mão precisam
+  SEMPRE de estabilização. Acelerar tomada sem estabilizar multiplica o tremor.
+  Tomadas paradas: vidstab tripod=1. Com movimento de câmera: smoothing=30. Com ação rápida:
+  smoothing=8 (mais que isso corta e borra).
+- ACELERAÇÃO: misturar quadros (tmix) só acima de ~3x; abaixo disso cria "fantasma".
+- ÁUDIO: ele quer voz limpa (sem ruído de fundo) e música de fundo. Redução de ruído que
+  funcionou: ffmpeg "highpass=f=90,arnndn=m=sh.rnnn" (tirou ~20 dB de ruído sem mexer na voz).
+- Takes de cozinha têm vozes de quem grava ("pode ir", "vai, tira"): passar a transcrição
+  para achar onde há fala e só usar o som original nos trechos sem voz.
+- Cortes na batida da música: medir bpm e fase com analisar_musica.py e montar as durações
+  em número de batidas. Colocar o refrão no momento de maior impacto visual.
+- Música: eu não consigo ouvir. Escolho por medição (bpm, energia, letra transcrita) e aviso.
+- Eu NÃO vejo vídeo em movimento nem ouço áudio: só confiro quadros parados e medições.
+  Sempre dizer isso com clareza e pedir para ele conferir tremor, sincronia e som.
+
+Coisas que prometi errado e tive que corrigir
+- Disse que não existia um "estúdio"; existe (HyperFrames Studio). Pesquisar antes de negar.
+- Disse que o login da HeyGen daria música; não deu no Windows.
+
+==============================================================================
+5. VIDEO-01 — anúncio "QG das Ofertas" (CONCLUÍDO E APROVADO)
+==============================================================================
+Pasta: Video-01\   Projeto HyperFrames: Video-01\edicao\   (Studio na porta 3002)
+Conteúdo: 4 takes de uma apresentadora falando para a câmera (vertical 4K), anúncio de um
+grupo de WhatsApp de promoções de tênis/corrida. Roteiro em Video-01\Docs\roteiro.txt.
+Referência: Video-01\Referencias\IMG_3313.MOV (versão já editada do mesmo vídeo; o pedido
+foi fazer melhor que ela).
+Edição (17,2 s), tudo num index.html escrito à mão:
+- cortes nos 4 takes, câmera com aproximação lenta, punch nas palavras fortes, rampas com flash
+- título do gancho palavra por palavra, legendas com palavra acendendo
+- celular com o grupo (ofertas ILUSTRATIVAS, sem preço, para não inventar promoção)
+- selo "MONITORANDO 24H", etiquetas, logo oficial do WhatsApp, notificações, botão final
+- 16 efeitos sonoros; voz com ruído removido (takes *_limpo.mp4)
+- música de fundo CC0 "Upbeat loop" (Freesound); licenças em edicao\assets\musica\LICENCAS.md
+Entrega: Video-01\Final Instagram\QG-das-Ofertas_Reels_1080x1920_v01.mp4
+O usuário disse "esse ficou bom".
+Pendência opcional: trocar as ofertas ilustrativas por prints reais do grupo, se ele mandar.
+
+==============================================================================
+6. VIDEO-02 — Reels de gastronomia, restaurante de alto padrão (ENTREGUE, AGUARDANDO OPINIÃO)
+==============================================================================
+Pasta: Video-02\   Projeto HyperFrames: Video-02\edicao\   (Studio na porta 3003)
+Conteúdo: 31 takes verticais (iPhone) do preparo de um prato: salmão e camarão selados,
+espinafre com alho, batatas, molho amarelo, montagem em camadas e tomadas finais no salão
+com adega ao fundo. Sem fala, sem legenda. Pedido: limpo, profissional, bonito e "viral",
+no máximo 60 s, com música brasileira ("La Belle de Jour", Alceu Valença).
+Brutos baixados de https://drive.google.com/drive/folders/1IvrqLdNhEDYtEKLoCQhRNqLeMHwxxqCV
+
+Como está montado
+- O index.html é GERADO pelo script Video-02\_CLAUDE\montar.py. NÃO editar o HTML à mão:
+  editar a lista TOMADAS (ou a cor) no script e rodar de novo.
+    python montar.py --tomadas            refaz todos os clipes (demorado) e o HTML
+    python montar.py --tomadas --so 3,17  refaz só as tomadas 3 e 17
+    python montar.py                      só o HTML        (--sem-musica para a versão sem trilha)
+  (usar o Python de C:\Users\lukin\.edicao\venv\Scripts\python.exe)
+- Cada tomada vira um clipe pronto em edicao\assets\tomadas\sNN.mp4: recortada, estabilizada,
+  com a cor corrigida e já na velocidade final.
+- 25 tomadas, 38,27 s, 67 batidas a 105,05 bpm (batida = 0,571 s).
+- Música: Video-02\Assets\musica\la-belle-de-jour.mp3 (baixada do canal oficial no YouTube a
+  pedido do usuário), trecho de 0:30,68 a 1:09. Abre com "Eu lembro da moça bonita da praia
+  de Boa Viagem"; o refrão "Azul era a Belle de Jour" cai na tomada 22 (prato e adega).
+- Estrutura: gancho com o prato pronto > ingredientes crus > frigideira > espinafre > viradas
+  > molho e batatas > montagem acelerada (molho, batatas, espinafre, salmão, camarão,
+  cebolinha) > salão (4 tomadas com fusão) > fade para preto.
+- Transições: rampa de zoom com whoosh (entrada das tomadas 2 e 16), flash no refrão,
+  fusões de 0,35 s no final. Som da frigideira nos trechos sem voz.
+- Cor geral e correção por take estão no topo do montar.py (COR e COR_TAKE).
+
+Histórico de revisão
+- v1 da cor foi reprovada (amarelada, estourada) e o vídeo estava tremido. Refeito com cor
+  neutra, estabilização em todas as tomadas e aceleração suavizada.
+Entrega atual: Video-02\Final Instagram\
+    Reels-Gastronomia_COM-musica_1080x1920_v01.mp4
+    Reels-Gastronomia_SEM-musica_1080x1920_v01.mp4
+O usuário AINDA NÃO DISSE se aprovou esta versão.
+
+Pontos em aberto no Video-02
+- Confirmar com ele se o tremor sumiu e se a cor agradou (eu só vi quadros parados).
+- As mãos na montagem (0:24 a 0:28) ainda saem um pouco rosadas.
+- Música comercial embutida pode ser restringida pelo Instagram em conta comercial; por isso
+  existe a versão sem música (adicionar a faixa pelo app, começando em 0:30 da música).
+- Não há texto nem logo do restaurante no vídeo: não sei o nome do restaurante nem do prato.
+  Se ele quiser assinatura no final, pedir o nome/logo.
+
+==============================================================================
+7. COMO COMEÇAR UM VÍDEO NOVO (receita que funcionou)
+==============================================================================
+1. Criar Video-NN\ com Brutos, Docs, Assets, Referencias, Renders.
+2. Baixar os brutos do Drive com gdown --folder e conferir com ffprobe.
+3. Fazer folhas de contato (ffmpeg tile) de todos os takes e OLHAR.
+4. Se há fala: transcrever.py. Se não há: transcrever mesmo assim, para achar vozes de fundo.
+5. Criar o projeto: npx --yes hyperframes@0.9.49 init edicao --example blank
+   --non-interactive --skip-skills ; abrir o Studio logo.
+6. Preparar os clipes com FFmpeg (1080x1920, 30 fps, estabilizados, cor neutra).
+7. Montar, rodar check, tirar snapshots, olhar, corrigir.
+8. Renderizar uma prévia, extrair quadros do MP4 e conferir.
+9. Exportar em "Final Instagram" com --quality high e conferir o arquivo com ffprobe.
